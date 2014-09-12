@@ -20,7 +20,7 @@ class Beeminder:
         path = path.lstrip('/')
         response = requests.get(API_URL + path,
                                 params={'auth_token': self.auth_token})
-        return response.json()
+        return response.json
 
     @property
     def user(self):
