@@ -22,15 +22,16 @@ def get_config():
 
 class Beelist:
 
-	def __init__(self, config, format='{slug}: {limsum}'):
+	def __init__(self, config, format='{slug}: {limsum} ({mostrecent}: {curval})'):
 		self.format = format
 		self._list = None
 		self.now = time.time()
+		self.today = time.strftime('%Y-%m-%d', time.localtime(self.now))
 		self.config = config
 		self.auth_token = config.get('common', 'auth_token')
 		self.bm = beeminder.Beeminder(self.auth_token)
 
-	def key(self, goal):
+	def groupkey(self, goal):
 		slug = goal['slug']
 		losedate = goal['losedate']
 		if slug not in self.config:
@@ -43,16 +44,35 @@ class Beelist:
 		if normideal > 1:
 			return float('inf')
 		default_ideal = self.config.getint('default', 'ideal')
-		return int(normideal * default_ideal)
+		return int(normideal * default_ideal) or 1
+
+	def test(self, goal):
+		goal_type = goal['goal_type']
+		lastday = goal['lastday']
+		frozen = goal['frozen']
+		slug = goal['slug']
+		mostrecent = goal['mostrecent']
+		if slug not in self.config:
+			self.config.add_section(slug)
+		isdaily = self.config.getboolean(slug, 'daily')
+		#print('{}, curday is {}'.format(slug, curday), self.now - curday > SECONDS_PER_DAY, isdaily)
+		return (goal_type in TYPES and not frozen and
+		        (not isdaily or self.today != mostrecent))
+
+	@property
+	def goals(self):
+		values = self.bm.goals.values()
+		for goal in values:
+			goal['mostrecent'] = time.strftime('%Y-%m-%d',
+			                                   time.localtime(goal['lastday']))
+		return values
 
 	@property
 	def list(self):
 		if self._list is None:
-			goals = sorted((goal for goal in
-			                self.bm.goals.values()
-			                if goal['goal_type'] in TYPES and not goal['frozen']),
+			goals = sorted((goal for goal in self.goals if self.test(goal)),
 			               key=lambda goal: goal['losedate'])
-			groups = itertools.groupby(goals, self.key)
+			groups = itertools.groupby(goals, self.groupkey)
 			self._list = {key: [self.format.format(**goal) for goal in group] for (key, group) in groups}
 		return self._list
 
@@ -60,6 +80,7 @@ class Beelist:
 		list = self.list
 		keys = sorted(list.keys())
 		result = []
+		result.append(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
 		for key in keys:
 			result.append('== Priority {} =='.format(key))
 			result.extend(list[key])
