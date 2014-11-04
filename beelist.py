@@ -71,7 +71,7 @@ class Beelist:
 	def list(self):
 		if self._list is None:
 			goals = sorted((goal for goal in self.goals if self.test(goal)),
-			               key=lambda goal: goal['losedate'])
+			               key=lambda goal: (self.groupkey(goal), goal['losedate']))
 			groups = itertools.groupby(goals, self.groupkey)
 			self._list = {key: [self.format.format(**goal) for goal in group] for (key, group) in groups}
 		return self._list
